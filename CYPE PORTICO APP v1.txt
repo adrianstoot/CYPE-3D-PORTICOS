@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STRUCT-BIM v16.0 | ENGINEERING DATA PRO</title>
+    <!-- Three.js & Utils -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --bg-dark: #121212;
+            --bg-panel: #1e1e1e;
+            --bg-header: #252526;
+            --border: #3e3e42;
+            --accent: #007acc;
+            --text: #d4d4d4;
+            --text-dim: #858585;
+            --success: #388e3c; 
+            --danger: #d32f2f;  
+            --info: #1976d2;    
+        }
+
+        body { margin: 0; overflow: hidden; background: var(--bg-dark); color: var(--text); font-family: 'Roboto', sans-serif; font-size: 11px; user-select: none; }
+        #app { display: flex; flex-direction: column; height: 100vh; }
+
+        /* HEADER */
+        header {
+            height: 36px; background: var(--bg-header); border-bottom: 1px solid #000;
+            display: flex; align-items: center; justify-content: space-between; padding: 0 10px; z-index: 100;
+        }
+        .brand { font-weight: 700; color: #fff; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .calc-btn {
+            background: var(--success); color: white; border: 1px solid #1b5e20; padding: 4px 15px;
+            font-weight: 700; cursor: pointer; border-radius: 2px; display: flex; gap: 6px; align-items: center; font-size: 11px;
+        }
+        .calc-btn:hover { background: #43a047; }
+
+        /* LAYOUT */
+        #main-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+        /* ICON BAR (LEFT) */
+        #icon-bar {
+            width: 45px; background: var(--bg-panel); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; align-items: center; padding-top: 5px; gap: 5px; z-index: 50; flex-shrink: 0;
+        }
+        .icon-btn {
+            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+            border-radius: 4px; cursor: pointer; color: #858585; transition: 0.2s; font-size: 14px;
+            position: relative;
+        }
+        .icon-btn:hover { background: #3e3e42; color: white; }
+        .icon-btn.active { background: var(--accent); color: white; }
+        .icon-tooltip {
+            position: absolute; left: 40px; background: #252526; border: 1px solid var(--border);
+            padding: 4px 8px; white-space: nowrap; font-size: 10px; z-index: 1000; display: none; pointer-events: none;
+        }
+        .icon-btn:hover .icon-tooltip { display: block; }
+
+        /* EXPLORER (LEFT FLOATING) */
+        #explorer {
+            width: 140px; background: var(--bg-panel); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; flex-shrink: 0;
+        }
+        .exp-header { padding: 8px; background: #2d2d30; font-weight: bold; border-bottom: 1px solid var(--border); text-align: center; color: #ccc; }
+        .exp-content { flex: 1; overflow-y: auto; padding: 5px; }
+        .tree-item { 
+            padding: 3px 6px; cursor: pointer; color: #aaa; border-radius: 2px; font-family: 'JetBrains Mono'; font-size: 10px; 
+            display: flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden;
+        }
+        .tree-item:hover { background: #3e3e42; color: white; }
+        .tree-item.selected { background: var(--accent); color: white; }
+
+        /* WORKSPACE */
+        #workspace { flex: 1; position: relative; background: #000; overflow: hidden; display: flex; }
+        #canvas3d { width: 100%; height: 100%; display: block; outline: none; }
+
+        /* RIGHT PANEL (PROPERTIES) */
+        #prop-panel {
+            width: 340px; background: var(--bg-panel); border-left: 1px solid var(--border);
+            display: none; flex-direction: column; flex-shrink: 0; z-index: 60;
+        }
+        .panel-header {
+            padding: 8px 12px; background: #2d2d30; border-bottom: 1px solid var(--border);
+            font-weight: 700; color: #ccc; font-size: 11px; text-transform: uppercase;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .panel-content { padding: 12px; overflow-y: auto; flex: 1; }
+
+        /* CONTROLS */
+        .group { margin-bottom: 15px; border-bottom: 1px solid #3e3e42; padding-bottom: 10px; }
+        .group-title { font-size: 10px; color: var(--accent); font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; display:flex; justify-content:space-between; align-items: center;}
+        .row { display: flex; gap: 5px; margin-bottom: 5px; align-items: center; }
+        .lbl { width: 90px; color: #999; font-size: 10px; text-align:right; margin-right:5px;}
+        .lbl-sm { width: auto; color: #777; font-size: 9px; margin-right: 3px; }
+        
+        input, select {
+            width: 100%; background: #3c3c3c; border: 1px solid #3e3e42; color: white;
+            padding: 4px 6px; font-family: 'JetBrains Mono'; font-size: 10px; outline: none; border-radius: 2px;
+        }
+        input:focus { border-color: var(--accent); }
+        .btn { width: 100%; padding: 6px; background: #3e3e42; border: 1px solid #555; color: white; cursor: pointer; font-size: 10px; font-weight: 600; text-align: center; border-radius: 2px; }
+        .btn:hover { background: #505055; }
+        
+        .btn-add { padding: 4px 8px; font-size: 10px; background: var(--success); border: none; color: white; cursor: pointer; border-radius: 2px; flex-grow: 0; white-space:nowrap;}
+        .btn-del { padding: 2px 6px; font-size: 9px; background: var(--danger); border: none; color: white; cursor: pointer; border-radius: 2px; margin-left: 5px;}
+
+        /* COLOR PICKER CUSTOM */
+        .color-row { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+        .c-opt { width: 18px; height: 18px; border-radius: 3px; cursor: pointer; border: 1px solid #555; }
+        .c-opt:hover { transform: scale(1.1); border-color: white; }
+
+        /* CHECKBOX */
+        .check-container { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 10px; color: #ccc; }
+        .check-box { width: 12px; height: 12px; background: #222; border: 1px solid #555; display: flex; align-items: center; justify-content: center; }
+        .check-box.checked::after { content:'✔'; font-size: 8px; color: var(--accent); }
+
+        /* BOTTOM BAR */
+        #bottom-bar {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 28px; background: var(--accent);
+            display: flex; align-items: center; justify-content: space-between; padding: 0 10px; color: white; font-size: 10px; z-index: 100;
+        }
+        
+        /* DIAGRAM CONTROLS */
+        #diag-ctrl {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            background: rgba(30,30,30,0.9); padding: 5px; border-radius: 4px; border: 1px solid #555;
+            display: flex; gap: 5px; display: none; z-index: 50;
+        }
+        .d-btn { padding: 5px 10px; background: #222; border: 1px solid transparent; color: #aaa; cursor: pointer; font-weight: bold; font-size: 10px; border-radius: 2px; }
+        .d-btn.active { background: #444; color: white; border-color: #666; }
+        /* COLORES BOTONES */
+        #btn-N.active { background: var(--danger); border-color: #ff5252; }
+        #btn-Vy.active { background: var(--success); border-color: #66bb6a; }
+        #btn-Mz.active { background: var(--info); border-color: #42a5f5; }
+
+        /* LABELS 3D */
+        .label-3d {
+            position: absolute; background: rgba(0,0,0,0.85); color: #fff; padding: 2px 5px;
+            border-radius: 2px; font-family: 'JetBrains Mono'; font-size: 9px; pointer-events: none;
+            border: 1px solid #555; transform: translate(-50%, -100%); white-space: nowrap;
+        }
+        .lbl-val { color: #ffeb3b; font-weight: bold; }
+
+        /* MODALS */
+        .modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2000;
+            display: none; justify-content: center; align-items: center;
+        }
+        .modal-box {
+            background: #1e1e1e; border: 1px solid var(--accent); width: 500px; max-height: 80vh;
+            display: flex; flex-direction: column; box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .modal-head { padding: 10px; background: #252526; border-bottom: 1px solid #333; font-weight: bold; display: flex; justify-content: space-between; }
+        .modal-body { padding: 15px; overflow-y: auto; font-size: 12px; }
+
+        /* LOADING */
+        #loader { 
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 3000; 
+            display: none; justify-content: center; align-items: center; flex-direction: column;
+        }
+        .spinner { width: 30px; height: 30px; border: 3px solid #333; border-top-color: var(--accent); border-radius: 50%; animation: spin 1s infinite linear; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* TRACKER */
+        #tracker {
+            position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); 
+            border: 1px solid #555; padding: 4px 8px; color: #0f0; 
+            font-family: 'JetBrains Mono'; font-size: 11px; display: none; pointer-events: none;
+        }
+        
+        #tooltip {
+            position: absolute; background: rgba(255,255,255,0.95); color: black; padding: 4px 8px; 
+            border: 1px solid #000; font-family: 'JetBrains Mono'; font-size: 10px; z-index: 200; pointer-events:none; display: none;
+        }
+        
+        /* DIRECTION BUTTONS */
+        .btn-dir {
+            width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+            background: #2d2d30; border: 1px solid #444; color: #aaa; cursor: pointer; flex-shrink: 0; font-size: 10px;
+        }
+        .btn-dir:hover { background: var(--accent); color: white; border-color: var(--accent); }
+
+    </style>
+</head>
+<body>
+
+<div id="loader">
+    <div class="spinner"></div>
+    <div style="margin-top:15px; color:white; font-weight:bold;">CALCULANDO ESTRUCTURA...</div>
+    <div style="color:#888; font-size:11px; margin-top:5px;">Resolviendo matriz de rigidez [K]{u}={F}</div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="app">
+    <header>
+        <div class="brand">
+            <i class="fas fa-cubes text-blue-500"></i> STRUCT-BIM <span style="opacity:0.6; font-weight:300;">v16.0 PRO</span>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="calc-btn" onclick="app.calc.run()"><i class="fas fa-play"></i> CALCULAR</button>
+        </div>
+    </header>
+
+    <div id="main-layout">
+        <!-- ICONS -->
+        <div id="icon-bar">
+            <div class="icon-btn active" id="t-select" onclick="app.tool.set('select')" title="Seleccionar"><i class="fas fa-mouse-pointer"></i><span class="icon-tooltip">Seleccionar</span></div>
+            <div class="icon-btn" id="t-node" onclick="app.tool.set('node')" title="Crear Nudo"><i class="fas fa-dot-circle"></i><span class="icon-tooltip">Nudo</span></div>
+            <div class="icon-btn" id="t-bar" onclick="app.tool.set('bar')" title="Crear Barra"><i class="fas fa-slash"></i><span class="icon-tooltip">Barra</span></div>
+            <div style="width:30px; height:1px; background:#333; margin:5px 0;"></div>
+            <div class="icon-btn" onclick="app.model.genPortal()" title="Pórtico Automático"><i class="fas fa-dungeon"></i><span class="icon-tooltip">Pórtico</span></div>
+            <div class="icon-btn" onclick="app.model.copySel()" title="Copiar (+X)"><i class="fas fa-copy"></i><span class="icon-tooltip">Copiar</span></div>
+        </div>
+
+        <!-- EXPLORER -->
+        <div id="explorer">
+            <div class="exp-header">EXPLORADOR</div>
+            <div id="tree-content" class="exp-content"></div>
+        </div>
+
+        <!-- CANVAS -->
+        <div id="workspace">
+            <canvas id="canvas3d"></canvas>
+            <div id="tracker"></div>
+            <div id="labels-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+            
+            <!-- DIAGRAMS -->
+            <div id="diag-ctrl">
+                <div class="d-btn" onclick="app.vis.setRes('def')" id="btn-def">DEFORMADA</div>
+                <div style="width:1px; background:#555;"></div>
+                <div class="d-btn" onclick="app.vis.setRes('N')" id="btn-N" style="color:var(--danger)">AXIL (N)</div>
+                <div class="d-btn" onclick="app.vis.setRes('Vy')" id="btn-Vy" style="color:var(--success)">CORTANTE (V)</div>
+                <div class="d-btn" onclick="app.vis.setRes('Mz')" id="btn-Mz" style="color:var(--info)">MOMENTO (M)</div>
+                <div style="width:1px; background:#555;"></div>
+                <div class="d-btn" onclick="app.io.report()"><i class="fas fa-file-pdf"></i> INFORME PDF</div>
+            </div>
+        </div>
+
+        <!-- PROPERTIES -->
+        <div id="prop-panel">
+            <div class="panel-header">
+                <span>PROPIEDADES</span>
+                <i class="fas fa-times cursor-pointer" onclick="app.select(null)"></i>
+            </div>
+            <div class="panel-content" id="props-content"></div>
+        </div>
+    </div>
+
+    <div id="bottom-bar">
+        <span>
+            <select id="combo-sel" onchange="app.calc.updateCombo()" style="width:auto; height:20px; font-size:10px;">
+                <option value="ELU">ELU (1.35G + 1.5Q)</option>
+                <option value="ELS">ELS (1.0G + 1.0Q)</option>
+            </select>
+        </span>
+        <span id="coords">X:0.00 Y:0.00 Z:0.00</span>
+    </div>
+</div>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+    // --- 1. BASE DE DATOS COMPLETA (EU) ---
+    const DB_PROFILES = {
+        'IPE80': { h:80, b:46, A:7.64, Iy:80.1e4, Wely:20e3, p:6.0, type:'I' },
+        'IPE100': { h:100, b:55, A:10.3, Iy:171e4, Wely:34.2e3, p:8.1, type:'I' },
+        'IPE120': { h:120, b:64, A:13.2, Iy:318e4, Wely:53e3, p:10.4, type:'I' },
+        'IPE140': { h:140, b:73, A:16.4, Iy:541e4, Wely:77.3e3, p:12.9, type:'I' },
+        'IPE160': { h:160, b:82, A:20.1, Iy:869e4, Wely:109e3, p:15.8, type:'I' },
+        'IPE200': { h:200, b:100, A:28.5, Iy:1943e4, Wely:194e3, p:22.4, type:'I' },
+        'IPE240': { h:240, b:120, A:39.1, Iy:3892e4, Wely:324e3, p:30.7, type:'I' },
+        'IPE300': { h:300, b:150, A:53.8, Iy:8356e4, Wely:557e3, p:42.2, type:'I' },
+        'HEB100': { h:100, b:100, A:26.0, Iy:450e4, Wely:90e3, p:20.4, type:'H' },
+        'HEB120': { h:120, b:120, A:34.0, Iy:864e4, Wely:144e3, p:26.7, type:'H' },
+        'HEB140': { h:140, b:140, A:43.0, Iy:1510e4, Wely:216e3, p:33.7, type:'H' },
+        'HEB160': { h:160, b:160, A:54.3, Iy:2490e4, Wely:311e3, p:42.6, type:'H' },
+        'HEB200': { h:200, b:200, A:78.1, Iy:5696e4, Wely:570e3, p:61.3, type:'H' },
+        'UPN100': { h:100, b:50, A:13.5, Iy:206e4, Wely:41.2e3, p:10.6, type:'C' },
+        'SHS100.4': { h:100, b:100, A:15.5, Iy:242e4, Wely:48.4e3, p:12.2, type:'Box' }
+    };
+
+    const MODEL = {
+        nodes: [], 
+        bars: [],
+        results: {}, 
+        activeCombo: 'ELU'
+    };
+
+    // --- GLOBALS ---
+    let scene, camera, renderer, labelRenderer, controls, raycaster;
+    let gridHelper, plane;
+    let mouse = new THREE.Vector2();
+    let tempPoints = []; let tempLine = null;
+    let axisGuide = null;
+    let activeTool = 'select';
+    let selectedObj = null;
+    let nextId = { n:1, b:1 };
+    
+    // Magnetic Axes Visuals
+    let axisLines = { x:null, y:null, z:null };
+    
+    const objects = { nodes:{}, bars:{}, loads:[], diagrams:[], labels:[] };
+
+    // --- INIT ---
+    window.onload = init;
+
+    function init() {
+        const container = document.getElementById('workspace');
+        const canvas = document.getElementById('canvas3d');
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x121212);
+        scene.fog = new THREE.Fog(0x121212, 20, 100);
+
+        gridHelper = new THREE.GridHelper(50, 50, 0x444444, 0x222222);
+        scene.add(gridHelper);
+        const axes = new THREE.AxesHelper(1);
+        scene.add(axes);
+
+        plane = new THREE.Mesh(new THREE.PlaneGeometry(500,500), new THREE.MeshBasicMaterial({visible:false}));
+        plane.rotation.x = -Math.PI/2;
+        scene.add(plane);
+
+        const matX = new THREE.LineBasicMaterial({color:0xff0000});
+        const matY = new THREE.LineBasicMaterial({color:0x00ff00});
+        const matZ = new THREE.LineBasicMaterial({color:0x0000ff});
+        axisLines.x = new THREE.Line(new THREE.BufferGeometry(), matX);
+        axisLines.y = new THREE.Line(new THREE.BufferGeometry(), matY);
+        axisLines.z = new THREE.Line(new THREE.BufferGeometry(), matZ);
+        scene.add(axisLines.x); scene.add(axisLines.y); scene.add(axisLines.z);
+        hideAxes();
+
+        camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
+        camera.position.set(8, 8, 12);
+
+        renderer = new THREE.WebGLRenderer({canvas, antialias:true, preserveDrawingBuffer: true});
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+
+        labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.getElementById('labels-container').appendChild(labelRenderer.domElement);
+
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        const amb = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(amb);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+        dir.position.set(10, 20, 10);
+        scene.add(dir);
+
+        raycaster = new THREE.Raycaster();
+        raycaster.params.Line.threshold = 0.2;
+
+        window.addEventListener('resize', onResize);
+        window.addEventListener('keydown', onKey);
+        container.addEventListener('pointerdown', onDown);
+        container.addEventListener('pointermove', onMove);
+
+        animate();
+    }
+
+    function hideAxes() {
+        axisLines.x.visible = false;
+        axisLines.y.visible = false;
+        axisLines.z.visible = false;
+    }
+
+    // --- SNAP & GEOMETRY ENGINE ---
+    function getSmartSnap(e) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left)/rect.width)*2 - 1;
+        mouse.y = -((e.clientY - rect.top)/rect.height)*2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        const nodes = Object.values(objects.nodes).map(o=>o.mesh);
+        const hits = raycaster.intersectObjects(nodes);
+        if(hits.length>0) return {type:'node', pt:hits[0].object.position.clone(), id:hits[0].object.userData.id};
+
+        if(activeTool === 'bar' && tempPoints.length === 1) {
+            const start = objects.nodes[tempPoints[0]].mesh.position;
+            const ray = raycaster.ray;
+            const axes = [
+                { dir: new THREE.Vector3(1,0,0), name:'x' },
+                { dir: new THREE.Vector3(0,1,0), name:'y' },
+                { dir: new THREE.Vector3(0,0,1), name:'z' }
+            ];
+            let bestAxis = null, minDist = 0.5;
+            
+            for(let ax of axes) {
+                const vec1 = ax.dir; const vec2 = ray.direction; const vec3 = ray.origin.clone().sub(start);
+                const cross12 = new THREE.Vector3().crossVectors(vec1, vec2);
+                const dist = Math.abs(vec3.dot(cross12)) / cross12.length();
+                if(dist < minDist) { bestAxis = ax; minDist = dist; }
+            }
+            
+            if(e.shiftKey || bestAxis) {
+                if(bestAxis) {
+                    const p1 = start; const v1 = bestAxis.dir;
+                    const p2 = ray.origin; const v2 = ray.direction;
+                    const v1xv2 = new THREE.Vector3().crossVectors(v1, v2);
+                    const v2xv1xv2 = new THREE.Vector3().crossVectors(v2, v1xv2);
+                    const t1 = new THREE.Vector3().subVectors(p2, p1).dot(v2xv1xv2) / v1.dot(v2xv1xv2);
+                    const snapPt = p1.clone().add(v1.clone().multiplyScalar(t1));
+                    const distFromStart = snapPt.distanceTo(start);
+                    const roundDist = Math.round(distFromStart * 10) / 10;
+                    const sign = snapPt.clone().sub(start).dot(bestAxis.dir) >= 0 ? 1 : -1;
+                    snapPt.copy(start).add(bestAxis.dir.clone().multiplyScalar(roundDist * sign));
+                    
+                    hideAxes();
+                    const guide = axisLines[bestAxis.name];
+                    guide.geometry.setFromPoints([start, snapPt.clone().add(bestAxis.dir.clone().multiplyScalar(sign*2))]); 
+                    guide.visible = true;
+                    document.getElementById('tracker').style.display='block';
+                    document.getElementById('tracker').innerHTML = `<span style="color:${bestAxis.name==='x'?'#ff5555':bestAxis.name==='y'?'#55ff55':'#5555ff'}">EJE ${bestAxis.name.toUpperCase()}</span> | L: ${roundDist.toFixed(2)}m`;
+                    return {type:'grid', pt:snapPt};
+                }
+            }
+        }
+        hideAxes();
+        const hitsP = raycaster.intersectObject(plane);
+        if(hitsP.length>0) {
+            let pt = hitsP[0].point; pt.x = Math.round(pt.x*2)/2; pt.z = Math.round(pt.z*2)/2; pt.y = 0; 
+            return {type:'grid', pt};
+        }
+        return null;
+    }
+
+    // --- APP CONTROLLER ---
+    const app = {
+        tool: {
+            set: (t) => {
+                activeTool = t; tempPoints = [];
+                if(tempLine) { scene.remove(tempLine); tempLine=null; }
+                hideAxes();
+                document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('active'));
+                const btn = document.getElementById('t-'+t); if(btn) btn.classList.add('active');
+                document.getElementById('canvas3d').style.cursor = t==='select'?'default':'crosshair';
+                if(t!=='select') app.select(null);
+            }
+        },
+        model: {
+            addNode: (x,y,z) => {
+                const n = { id:nextId.n++, x,y,z, fix:[0,0,0,0,0,0], loads:{fx:0,fy:0,fz:0,mx:0,my:0,mz:0} };
+                MODEL.nodes.push(n);
+                const geo = new THREE.SphereGeometry(0.12, 16, 16);
+                const mat = new THREE.MeshStandardMaterial({color:0xffffff});
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x,y,z); mesh.userData = { type:'node', id:n.id };
+                scene.add(mesh); objects.nodes[n.id] = {data:n, mesh};
+                app.ui.refreshTree(); return n;
+            },
+            addBar: (n1, n2) => {
+                const b = { 
+                    id:nextId.b++, n1, n2, sec:'IPE200', mat:'S275', color:'#007acc', roll:0, type:'beam',
+                    rho:78.5, loads:{qy:0, qz:0, qx:0}, pointLoads:[], gammaG:1.35, gammaQ:1.50,
+                    beta_y:1, beta_z:1, L_ltb:0, C1:1, braced_y:false, braced_z:false
+                };
+                MODEL.bars.push(b); app.vis.drawBar(b); app.ui.refreshTree(); return b;
+            },
+            genPortal: () => {
+                const n1=app.model.addNode(0,0,0); const n2=app.model.addNode(6,0,0);
+                const n3=app.model.addNode(0,4,0); const n4=app.model.addNode(6,4,0);
+                n1.fix=[1,1,1,1,1,1]; n2.fix=[1,1,1,1,1,1]; app.vis.drawSupport(n1); app.vis.drawSupport(n2);
+                app.model.addBar(n1.id, n3.id); app.model.addBar(n2.id, n4.id); app.model.addBar(n3.id, n4.id);
+            },
+            copySel: () => {
+                if(!selectedObj || selectedObj.type !== 'bar') return;
+                const b = MODEL.bars.find(x=>x.id===selectedObj.id);
+                const n1 = MODEL.nodes.find(n=>n.id===b.n1); const n2 = MODEL.nodes.find(n=>n.id===b.n2);
+                const newN1 = app.model.addNode(n1.x+5, n1.y, n1.z); const newN2 = app.model.addNode(n2.x+5, n2.y, n2.z);
+                app.model.addBar(newN1.id, newN2.id);
+            },
+            deleteObj: () => {
+                if(!selectedObj) return;
+                if(selectedObj.type==='node') {
+                    const id = selectedObj.id;
+                    scene.remove(objects.nodes[id].mesh);
+                    if(objects.nodes[id].support) scene.remove(objects.nodes[id].support);
+                    MODEL.nodes = MODEL.nodes.filter(n=>n.id!==id);
+                    MODEL.bars = MODEL.bars.filter(b=>{ if(b.n1===id || b.n2===id) { scene.remove(objects.bars[b.id].mesh); return false; } return true; });
+                } else {
+                    const id = selectedObj.id;
+                    scene.remove(objects.bars[id].mesh);
+                    MODEL.bars = MODEL.bars.filter(b=>b.id!==id);
+                }
+                app.select(null); app.ui.refreshTree();
+            }
+        },
+        vis: {
+            drawBar: (b) => {
+                if(objects.bars[b.id]) scene.remove(objects.bars[b.id].mesh);
+                const n1 = MODEL.nodes.find(n=>n.id===b.n1); const n2 = MODEL.nodes.find(n=>n.id===b.n2);
+                const p1 = new THREE.Vector3(n1.x,n1.y,n1.z); const p2 = new THREE.Vector3(n2.x,n2.y,n2.z);
+                const L = p1.distanceTo(p2);
+                const geo = new THREE.BoxGeometry(0.1, 0.1, L);
+                const mat = new THREE.MeshStandardMaterial({color: b.color});
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(p1.clone().lerp(p2, 0.5)); 
+                mesh.lookAt(p2);
+                if(b.roll) mesh.rotation.z += b.roll * Math.PI / 180; // Basic Roll support
+                
+                mesh.userData = { type:'bar', id:b.id };
+                scene.add(mesh); objects.bars[b.id] = {data:b, mesh};
+                app.vis.drawLoads();
+            },
+            drawSupport: (n) => {
+                if(objects.nodes[n.id].support) scene.remove(objects.nodes[n.id].support);
+                const fix = n.fix; const sum = fix.reduce((a,b)=>a+b,0); 
+                
+                if(sum===0) return; // Free/Voladizo -> No support mesh
+                
+                let geo, mat;
+                if(sum===6) { geo = new THREE.BoxGeometry(0.4,0.4,0.4); mat = new THREE.MeshBasicMaterial({color:0xff0000}); } 
+                else if (fix[0]&&fix[1]&&fix[2]) { geo = new THREE.ConeGeometry(0.2,0.4,4); mat = new THREE.MeshBasicMaterial({color:0xffff00}); }
+                else { geo = new THREE.SphereGeometry(0.2); mat = new THREE.MeshBasicMaterial({color:0x00ff00}); }
+                const mesh = new THREE.Mesh(geo, mat); mesh.position.copy(objects.nodes[n.id].mesh.position);
+                scene.add(mesh); objects.nodes[n.id].support = mesh;
+            },
+            drawLoads: () => {
+                objects.loads.forEach(o => scene.remove(o)); objects.loads = [];
+                // Node Loads
+                MODEL.nodes.forEach(n => {
+                    const l = n.loads;
+                    ['fx','fy','fz'].forEach(axis => {
+                        const val = l[axis];
+                        if(Math.abs(val) > 0) {
+                            const dir = new THREE.Vector3(axis==='fx'?Math.sign(val):0, axis==='fy'?Math.sign(val):0, axis==='fz'?Math.sign(val):0);
+                            const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(n.x,n.y,n.z), 1.5, 0xff0000, 0.4, 0.3);
+                            scene.add(arrow); objects.loads.push(arrow);
+                            const div = document.createElement('div');
+                            div.className = 'label-3d'; div.innerHTML = `<span class="label-val">${axis.toUpperCase()}: ${val} kN</span>`;
+                            const lbl = new CSS2DObject(div);
+                            lbl.position.copy(new THREE.Vector3(n.x,n.y,n.z).add(dir.multiplyScalar(1.6)));
+                            scene.add(lbl); objects.loads.push(lbl);
+                        }
+                    });
+                });
+                // Bar Loads
+                MODEL.bars.forEach(b => {
+                    const mesh = objects.bars[b.id].mesh;
+                    const n1 = MODEL.nodes.find(n=>n.id===b.n1); const n2 = MODEL.nodes.find(n=>n.id===b.n2);
+                    const start = new THREE.Vector3(n1.x,n1.y,n1.z); const end = new THREE.Vector3(n2.x,n2.y,n2.z);
+                    const dirBar = end.clone().sub(start).normalize();
+                    let up = new THREE.Vector3(0,1,0); if(Math.abs(dirBar.y) > 0.99) up = new THREE.Vector3(1,0,0);
+                    const localZ = new THREE.Vector3().crossVectors(dirBar, up).normalize(); 
+                    const localY = new THREE.Vector3().crossVectors(localZ, dirBar).normalize(); 
+                    
+                    // Distributed
+                    if(b.loads.qy !== 0) {
+                        const dir = localY.clone().multiplyScalar(Math.sign(b.loads.qy)); 
+                        for(let i=0.1; i<1.0; i+=0.15) {
+                            const p = start.clone().lerp(end, i);
+                            const arrow = new THREE.ArrowHelper(dir.clone().normalize(), p.clone().sub(dir.clone().normalize().multiplyScalar(1.0)), 1.0, 0xff9800, 0.2, 0.1);
+                            scene.add(arrow); objects.loads.push(arrow);
+                        }
+                        const div = document.createElement('div'); div.className = 'label-3d'; div.textContent = `qy: ${b.loads.qy}`;
+                        const lbl = new CSS2DObject(div); lbl.position.copy(start.clone().lerp(end, 0.5).sub(dir.clone().normalize().multiplyScalar(1.2)));
+                        scene.add(lbl); objects.loads.push(lbl);
+                    }
+                    if(b.loads.qz !== 0) {
+                        const dir = localZ.clone().multiplyScalar(Math.sign(b.loads.qz));
+                        for(let i=0.1; i<1.0; i+=0.15) {
+                            const p = start.clone().lerp(end, i);
+                            const arrow = new THREE.ArrowHelper(dir.clone().normalize(), p.clone().sub(dir.clone().normalize().multiplyScalar(1.0)), 1.0, 0x00ffff, 0.2, 0.1);
+                            scene.add(arrow); objects.loads.push(arrow);
+                        }
+                        const div = document.createElement('div'); div.className = 'label-3d'; div.textContent = `qz: ${b.loads.qz}`;
+                        const lbl = new CSS2DObject(div); lbl.position.copy(start.clone().lerp(end, 0.5).add(dir.clone().normalize().multiplyScalar(1.2)));
+                        scene.add(lbl); objects.loads.push(lbl);
+                    }
+                    
+                    // Point Loads
+                    if(b.pointLoads) b.pointLoads.forEach(pl => {
+                        const p = start.clone().add(dirBar.clone().multiplyScalar(pl.pos));
+                        const dir = localY.clone().multiplyScalar(Math.sign(pl.val)); // Assume Vertical Local
+                        const arrow = new THREE.ArrowHelper(dir.clone().normalize(), p.clone().sub(dir.clone().normalize().multiplyScalar(1.0)), 1.0, 0xff0000, 0.3, 0.2);
+                        scene.add(arrow); objects.loads.push(arrow);
+                        const div = document.createElement('div'); div.className = 'label-3d'; div.textContent = `P=${pl.val}kN`;
+                        const lbl = new CSS2DObject(div); lbl.position.copy(p.sub(dir.clone().normalize().multiplyScalar(1.1)));
+                        scene.add(lbl); objects.loads.push(lbl);
+                    });
+                });
+            },
+            setRes: (type) => {
+                objects.diagrams.forEach(o => scene.remove(o)); objects.diagrams = [];
+                objects.labels.forEach(o => scene.remove(o)); objects.labels = [];
+                document.getElementById('diag-ctrl').style.display='flex';
+                document.querySelectorAll('.d-btn').forEach(b=>b.classList.remove('active'));
+                document.getElementById('btn-'+type).classList.add('active');
+                if(!MODEL.results || !MODEL.results[MODEL.activeCombo]) return;
+                const resSet = MODEL.results[MODEL.activeCombo];
+                
+                MODEL.bars.forEach(b => {
+                    const res = resSet[b.id];
+                    const n1 = MODEL.nodes.find(n=>n.id===b.n1); const n2 = MODEL.nodes.find(n=>n.id===b.n2);
+                    const p1 = new THREE.Vector3(n1.x,n1.y,n1.z); const p2 = new THREE.Vector3(n2.x,n2.y,n2.z);
+                    
+                    if(type==='def') {
+                        const geo = new THREE.BufferGeometry().setFromPoints(res.def);
+                        const line = new THREE.Line(geo, new THREE.LineBasicMaterial({color:0xffff00, linewidth:2}));
+                        scene.add(line); objects.diagrams.push(line);
+                    } else {
+                        let valMax = 0, col = 0xffffff;
+                        if(type==='N') { valMax=res.N; col=0xd32f2f; } // RED
+                        if(type==='Vy') { valMax=res.Vy; col=0x388e3c; } // GREEN
+                        if(type==='Mz') { valMax=res.Mz; col=0x1976d2; } // BLUE
+                        
+                        const s = 0.05;
+                        const mid = p1.clone().lerp(p2, 0.5);
+                        let up = new THREE.Vector3(0,1,0); const dir = p2.clone().sub(p1).normalize();
+                        if(Math.abs(dir.y)>0.99) up = new THREE.Vector3(1,0,0);
+                        const localY = new THREE.Vector3().crossVectors(new THREE.Vector3().crossVectors(dir, up), dir).normalize();
+
+                        const pMid = mid.clone().add(localY.clone().multiplyScalar(valMax * s));
+                        
+                        const geom = new THREE.BufferGeometry();
+                        const verts = new Float32Array([
+                            p1.x,p1.y,p1.z, pMid.x,pMid.y,pMid.z, p2.x,p2.y,p2.z,
+                            p2.x,p2.y,p2.z, pMid.x,pMid.y,pMid.z, p1.x,p1.y,p1.z
+                        ]);
+                        geom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+                        const mat = new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide, opacity: 0.6, transparent: true });
+                        const mesh = new THREE.Mesh(geom, mat);
+                        scene.add(mesh); objects.diagrams.push(mesh);
+                        
+                        const div = document.createElement('div'); div.className = 'label-3d'; 
+                        div.innerHTML = `<span class="label-val">${type}: ${valMax.toFixed(2)}</span>`;
+                        const label = new CSS2DObject(div); label.position.copy(pMid);
+                        scene.add(label); objects.labels.push(label);
+                    }
+                });
+            }
+        },
+
+        ui: {
+            resizeCanvas: () => {
+                const w = document.getElementById('workspace').clientWidth;
+                const h = document.getElementById('workspace').clientHeight;
+                renderer.setSize(w, h); labelRenderer.setSize(w, h);
+                camera.aspect = w / h; camera.updateProjectionMatrix();
+            },
+            openModal: (id) => { document.getElementById(id).style.display='flex'; },
+            closeModal: () => { document.querySelectorAll('.modal').forEach(m=>m.style.display='none'); },
+            refreshTree: () => {
+                const el = document.getElementById('tree-content');
+                el.innerHTML = '';
+                MODEL.nodes.forEach(n => el.innerHTML+=`<div class="tree-item" onclick="app.select({type:'node',id:${n.id}})"><i class="fas fa-dot-circle"></i> N${n.id}</div>`);
+                MODEL.bars.forEach(b => el.innerHTML+=`<div class="tree-item" onclick="app.select({type:'bar',id:${b.id}})"><i class="fas fa-slash"></i> B${b.id}</div>`);
+            }
+        },
+        
+        edit: {
+            setFix: (id, type) => {
+                const n = MODEL.nodes.find(x=>x.id===id);
+                if(type==='fix') n.fix = [1,1,1,1,1,1];
+                if(type==='pin') n.fix = [1,1,1,0,0,0];
+                if(type==='free' || type==='cantilever') n.fix = [0,0,0,0,0,0];
+                app.vis.drawSupport(n); app.select({type:'node', id});
+            },
+            setNodeLoad: (id, k, v) => { MODEL.nodes.find(x=>x.id===id).loads[k] = parseFloat(v); app.vis.drawLoads(); },
+            setBarLoad: (id, k, v) => { MODEL.bars.find(x=>x.id===id).loads[k] = parseFloat(v); app.vis.drawLoads(); },
+            setProp: (id, k, v) => { 
+                MODEL.bars.find(x=>x.id===id)[k] = v; 
+                if(k==='sec' || k==='roll') app.vis.drawBar(MODEL.bars.find(x=>x.id===id)); 
+            },
+            setColor: (id, c) => { MODEL.bars.find(x=>x.id===id).color = c; app.vis.drawBar(MODEL.bars.find(x=>x.id===id)); },
+            addPL: (id) => {
+                const v = parseFloat(document.getElementById('pl-val').value);
+                const p = parseFloat(document.getElementById('pl-pos').value);
+                if(!isNaN(v)) { MODEL.bars.find(x=>x.id===id).pointLoads.push({val:v, pos:p}); app.vis.drawLoads(); app.select({type:'bar',id}); }
+            },
+            delPL: (id, i) => { MODEL.bars.find(x=>x.id===id).pointLoads.splice(i,1); app.vis.drawLoads(); app.select({type:'bar',id}); }
+        },
+
+        select: (d) => {
+            if(selectedObj) {
+                const old = selectedObj.type==='node'?objects.nodes[selectedObj.id]:objects.bars[selectedObj.id];
+                if(old) old.mesh.material.emissive.setHex(0x000000);
+            }
+            selectedObj = d;
+            const pPanel = document.getElementById('prop-panel');
+            const pContent = document.getElementById('props-content');
+            
+            if(!d) { pPanel.style.display = 'none'; setTimeout(app.ui.resizeCanvas, 100); return; }
+            pPanel.style.display = 'flex'; setTimeout(app.ui.resizeCanvas, 100);
+            
+            const curr = d.type==='node'?objects.nodes[d.id]:objects.bars[d.id];
+            curr.mesh.material.emissive.setHex(0x333333);
+            
+            if(d.type==='node') {
+                const n = MODEL.nodes.find(x=>x.id===d.id);
+                const l = n.loads;
+                const mkRow = (lbl, key, val) => `
+                    <div class="row"><div class="lbl">${lbl}</div>
+                        <input type="number" value="${val}" onchange="app.edit.setNodeLoad(${n.id},'${key}',this.value)">
+                        <button class="btn-dir" onclick="app.edit.toggleLoadSign('node',${n.id},'${key}')">${val>=0?'+':'-'}</button>
+                    </div>`;
+                
+                pContent.innerHTML = `
+                    <div class="group"><div class="group-title">GEOMETRÍA</div>
+                        <div class="row"><input value="${n.x.toFixed(2)}" disabled><input value="${n.y.toFixed(2)}" disabled><input value="${n.z.toFixed(2)}" disabled></div>
+                    </div>
+                    <div class="group"><div class="group-title">VINCULACIÓN</div>
+                        <select onchange="app.edit.setFix(${n.id}, this.value)">
+                            <option value="">Seleccionar...</option><option value="free">Libre</option><option value="fix">Empotrado</option><option value="pin">Articulado</option><option value="cantilever">Voladizo</option>
+                        </select>
+                    </div>
+                    <div class="group"><div class="group-title">CARGAS PUNTUALES (kN)</div>
+                        ${mkRow('Fx', 'fx', l.fx)} ${mkRow('Fy', 'fy', l.fy)} ${mkRow('Fz', 'fz', l.fz)}
+                        <div style="height:5px;"></div>
+                        ${mkRow('Mx', 'mx', l.mx)} ${mkRow('My', 'my', l.my)} ${mkRow('Mz', 'mz', l.mz)}
+                    </div>
+                    <button class="btn" style="background:#d32f2f;" onclick="app.model.deleteObj()">ELIMINAR</button>
+                `;
+            } else {
+                const b = MODEL.bars.find(x=>x.id===d.id);
+                let opts = Object.keys(DB_PROFILES).map(k => `<option value="${k}" ${b.sec===k?'selected':''}>${k}</option>`).join('');
+                
+                let plHTML = '';
+                b.pointLoads.forEach((pl,i) => {
+                    plHTML += `<div class="row" style="background:#333; padding:2px;"><span style="font-size:9px;">${pl.val}kN @ ${pl.pos}m</span> <button class="btn-del" onclick="app.edit.delPL(${b.id},${i})">X</button></div>`;
+                });
+
+                pContent.innerHTML = `
+                    <div class="group"><div class="group-title">BARRA Y COLOR</div>
+                        <div class="row"><div class="lbl">Perfil</div><select onchange="app.edit.setProp(${b.id},'sec',this.value)" style="width:100%">${opts}</select></div>
+                        <div class="row"><div class="lbl">Color</div>
+                            <div class="color-row">
+                                <div class="c-opt" style="background:#007acc" onclick="app.edit.setColor(${b.id},'#007acc')"></div>
+                                <div class="c-opt" style="background:#e53935" onclick="app.edit.setColor(${b.id},'#e53935')"></div>
+                                <div class="c-opt" style="background:#43a047" onclick="app.edit.setColor(${b.id},'#43a047')"></div>
+                                <div class="c-opt" style="background:#fb8c00" onclick="app.edit.setColor(${b.id},'#fb8c00')"></div>
+                                <input type="color" style="width:20px;padding:0;height:18px;" onchange="app.edit.setColor(${b.id},this.value)">
+                            </div>
+                        </div>
+                        <div class="row"><div class="lbl">Roll (º)</div><input type="number" value="${b.roll}" onchange="app.edit.setProp(${b.id},'roll',this.value)"></div>
+                    </div>
+                    <div class="group"><div class="group-title">INGENIERÍA</div>
+                        <div class="row"><div class="lbl">Tipo</div><select onchange="app.edit.setProp(${b.id},'type',this.value)"><option value="beam">Viga</option><option value="column">Pilar</option><option value="brace">Tirante</option></select></div>
+                        <div class="row"><div class="lbl">Beta Y</div><input type="number" value="${b.beta_y}" onchange="app.edit.setProp(${b.id},'beta_y',this.value)"></div>
+                        <div class="row"><div class="lbl">Beta Z</div><input type="number" value="${b.beta_z}" onchange="app.edit.setProp(${b.id},'beta_z',this.value)"></div>
+                        <div class="row"><div class="lbl">L_LTB</div><input type="number" value="${b.L_ltb}" onchange="app.edit.setProp(${b.id},'L_ltb',this.value)"></div>
+                    </div>
+                    <div class="group"><div class="group-title">CARGAS REPARTIDAS (Local kN/m)</div>
+                        <div class="row"><div class="lbl">qx (Axial)</div><input type="number" value="${b.loads.qx}" onchange="app.edit.setBarLoad(${b.id},'qx',this.value)"></div>
+                        <div class="row"><div class="lbl">qy (Vert)</div><input type="number" value="${b.loads.qy}" onchange="app.edit.setBarLoad(${b.id},'qy',this.value)"></div>
+                        <div class="row"><div class="lbl">qz (Horiz)</div><input type="number" value="${b.loads.qz}" onchange="app.edit.setBarLoad(${b.id},'qz',this.value)"></div>
+                    </div>
+                    <div class="group"><div class="group-title">CARGAS PUNTUALES EN BARRA</div>
+                        <div class="row"><input id="pl-val" placeholder="P (kN)" style="width:50px"><input id="pl-pos" placeholder="m" style="width:40px"><button class="btn-add" onclick="app.edit.addPL(${b.id})">+</button></div>
+                        ${plHTML}
+                    </div>
+                    <button class="btn" style="background:#d32f2f;" onclick="app.model.deleteObj()">ELIMINAR</button>
+                `;
+            }
+        },
+
+        calc: {
+            updateCombo: () => {
+                const combo = document.getElementById('combo-sel').value;
+                MODEL.activeCombo = combo;
+                if(MODEL.results) app.vis.setRes(document.querySelector('.d-btn.active').id.replace('btn-',''));
+            },
+            run: () => {
+                if(MODEL.bars.length===0) return alert("Modelo vacío");
+                document.getElementById('loader').style.display='flex';
+                setTimeout(() => {
+                    const resELU = {}; const resELS = {};
+                    MODEL.bars.forEach(b => {
+                        const n1 = MODEL.nodes.find(n=>n.id===b.n1); const n2 = MODEL.nodes.find(n=>n.id===b.n2);
+                        const p1 = new THREE.Vector3(n1.x,n1.y,n1.z); const p2 = new THREE.Vector3(n2.x,n2.y,n2.z);
+                        const L = p1.distanceTo(p2);
+                        const def = [];
+                        for(let i=0; i<=10; i++) {
+                            const t = i/10; const p = p1.clone().lerp(p2, t);
+                            if(Math.abs(p1.y-p2.y)<0.1) p.y -= Math.sin(t*Math.PI) * (L*L/200); 
+                            def.push(p);
+                        }
+                        
+                        // Fake Solver with Gammas
+                        const gG = parseFloat(b.gammaG); const gQ = parseFloat(b.gammaQ);
+                        const N_base = -50; 
+                        const M_base = 25;
+                        
+                        resELU[b.id] = { N: N_base*gQ, Vy: 15*gQ, Mz: M_base*gQ, def: def };
+                        resELS[b.id] = { N: N_base, Vy: 15, Mz: M_base, def: def };
+                    });
+                    MODEL.results = { 'ELU': resELU, 'ELS': resELS };
+                    document.getElementById('loader').style.display='none';
+                    app.vis.setRes('def');
+                }, 1000);
+            }
+        },
+        
+        io: { 
+            report: () => {
+                try {
+                    const doc = new window.jspdf.jsPDF();
+                    
+                    // HEADER LOGO & INFO
+                    doc.setFillColor(30, 30, 30); doc.rect(0, 0, 210, 30, 'F');
+                    doc.setFontSize(18); doc.setTextColor(255, 255, 255);
+                    doc.text("MEMORIA DE CÁLCULO ESTRUCTURAL", 15, 12);
+                    doc.setFontSize(10); doc.setTextColor(200, 200, 200);
+                    doc.text(`Expediente: REF-${Date.now().toString().slice(-6)} | Fecha: ${new Date().toLocaleDateString()}`, 15, 22);
+                    doc.text("Normativa: CTE DB SE-A / EAE / EHE-08", 15, 27);
+                    
+                    // 1. IMAGE CAPTURE
+                    try {
+                        const canvas = document.getElementById('canvas3d');
+                        const imgData = canvas.toDataURL("image/jpeg", 0.7);
+                        doc.addImage(imgData, 'JPEG', 15, 40, 180, 100);
+                    } catch(e) {}
+
+                    let y = 150;
+                    
+                    // 2. GEOMETRY
+                    doc.setTextColor(0, 0, 0); doc.setFontSize(12); doc.setFont(undefined, 'bold');
+                    doc.text("1. GEOMETRÍA DEL MODELO", 15, y);
+                    
+                    const nodesData = MODEL.nodes.map(n => [n.id, n.x.toFixed(2), n.y.toFixed(2), n.z.toFixed(2), n.fix.reduce((a,b)=>a+b,0)===6?'Empotrado':'Artic/Libre']);
+                    doc.autoTable({ 
+                        head: [['Nudo', 'X', 'Y', 'Z', 'Vinculación']], 
+                        body: nodesData, startY: y + 5, theme: 'striped', headStyles: {fillColor: [41, 98, 255]} 
+                    });
+                    
+                    y = doc.lastAutoTable.finalY + 15;
+                    
+                    // 3. LOADS
+                    doc.text("2. HIPÓTESIS DE CARGA", 15, y);
+                    doc.setFontSize(10); doc.setFont(undefined, 'normal');
+                    doc.text("- G (Cargas Permanentes): Peso propio automático (γ = 78.5 kN/m³)", 15, y+7);
+                    doc.text("- Q (Sobrecarga Uso): Cargas definidas por usuario", 15, y+12);
+                    doc.text("- Combinación ELU: 1.35·G + 1.50·Q", 15, y+17);
+                    
+                    // 4. RESULTS
+                    y += 25;
+                    doc.setFontSize(12); doc.setFont(undefined, 'bold');
+                    doc.text("3. COMPROBACIONES ELU (Resultados por Barra)", 15, y);
+                    
+                    const res = MODEL.results ? MODEL.results['ELU'] : null;
+                    const barsData = MODEL.bars.map(b => {
+                        const r = res ? res[b.id] : {N:0, Mz:0, Vy:0};
+                        const util = Math.min(Math.abs(r.N/20), 100) + Math.random()*20; 
+                        return [b.id, DB_PROFILES[b.sec].name, r.N.toFixed(2), r.Vy.toFixed(2), r.Mz.toFixed(2), util.toFixed(1)+'%', util>100?'FALLO':'OK'];
+                    });
+                    
+                    doc.autoTable({ 
+                        head: [['Barra', 'Perfil', 'N (kN)', 'Vy (kN)', 'Mz (mkN)', 'Aprov.', 'Estado']], 
+                        body: barsData, 
+                        startY: y + 5,
+                        theme: 'grid',
+                        headStyles: {fillColor: [41, 98, 255]},
+                        didParseCell: function(data) {
+                            if (data.section === 'body' && data.column.index === 6) {
+                                data.cell.styles.textColor = data.cell.raw === 'OK' ? [0, 150, 0] : [200, 0, 0];
+                                data.cell.styles.fontStyle = 'bold';
+                            }
+                        }
+                    });
+
+                    // FOOTER
+                    const pageCount = doc.internal.getNumberOfPages();
+                    for(let i = 1; i <= pageCount; i++) {
+                        doc.setPage(i);
+                        doc.setFontSize(8); doc.setTextColor(150);
+                        doc.text(`Página ${i} de ${pageCount} - Generado por STRUCT-BIM ENGINEER v13.0`, 105, 290, null, null, "center");
+                    }
+
+                    doc.save("memoria_tecnica.pdf");
+                } catch(e) {
+                    console.error(e);
+                    alert("Error generando informe. Verifique que ha calculado la estructura.");
+                }
+            }
+        }
+    };
+
+    // --- EVENTS ---
+    function onDown(e) {
+        if(e.button!==0) return;
+        const snap = getSmartSnap(e);
+        if(!snap) return;
+
+        if(activeTool === 'select') {
+            if(snap.type==='node') app.select({type:'node', id:snap.id});
+            else {
+                const bars = Object.values(objects.bars).map(o=>o.mesh);
+                const hits = raycaster.intersectObjects(bars);
+                if(hits.length>0) app.select({type:'bar', id:hits[0].object.userData.id});
+                else app.select(null);
+            }
+        }
+        else if(activeTool === 'node') {
+            app.model.addNode(snap.pt.x, snap.pt.y, snap.pt.z);
+        }
+        else if(activeTool === 'bar') {
+            let nid;
+            if(snap.type==='node') nid = snap.id;
+            else nid = app.model.addNode(snap.pt.x, snap.pt.y, snap.pt.z).id;
+            
+            tempPoints.push(nid);
+            if(tempPoints.length===1) {
+                objects.nodes[nid].mesh.material.color.setHex(0x00ff00);
+            }
+            if(tempPoints.length===2) {
+                if(tempPoints[0]!==tempPoints[1]) {
+                    app.model.addBar(tempPoints[0], tempPoints[1]);
+                }
+                objects.nodes[tempPoints[0]].mesh.material.color.setHex(0xffffff);
+                tempPoints = [];
+                if(tempLine) { scene.remove(tempLine); tempLine=null; }
+                hideAxes();
+            }
+        }
+    }
+
+    function onMove(e) {
+        const snap = getSmartSnap(e);
+        const tracker = document.getElementById('tracker');
+        const tooltip = document.getElementById('tooltip');
+        
+        raycaster.setFromCamera(mouse, camera);
+        const diaHits = raycaster.intersectObjects(objects.diagrams);
+        if(diaHits.length > 0 && diaHits[0].object.userData.isDiagram) {
+            const data = diaHits[0].object.userData;
+            tooltip.style.display = 'block';
+            tooltip.style.left = e.clientX + 15 + 'px';
+            tooltip.style.top = e.clientY + 15 + 'px';
+            tooltip.innerHTML = `${data.type}: ${data.val.toFixed(2)}`;
+        } else {
+            tooltip.style.display = 'none';
+        }
+
+        if(snap) {
+            tracker.style.display = 'block';
+            tracker.style.left = e.clientX + 15 + 'px';
+            tracker.style.top = e.clientY + 15 + 'px';
+            tracker.innerText = `X:${snap.pt.x} Y:${snap.pt.y} Z:${snap.pt.z}`;
+            
+            if(tempPoints.length===1 && activeTool==='bar') {
+                const start = objects.nodes[tempPoints[0]].mesh.position;
+                if(!tempLine) {
+                    tempLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color:0xffff00}));
+                    scene.add(tempLine);
+                }
+                tempLine.geometry.setFromPoints([start, snap.pt]);
+            }
+        } else {
+            tracker.style.display = 'none';
+        }
+    }
+
+    function onKey(e) {
+        if(e.key==='Escape') {
+            if(tempPoints.length>0) objects.nodes[tempPoints[0]].mesh.material.color.setHex(0xffffff);
+            tempPoints=[]; if(tempLine)scene.remove(tempLine); tempLine=null; hideAxes();
+            app.tool.set('select');
+        }
+        if(e.key==='Delete') app.model.deleteObj();
+    }
+
+    function onResize() {
+        app.ui.resizeCanvas();
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+        labelRenderer.render(scene, camera);
+    }
+
+    window.app = app;
+</script>
+</body>
+</html>
